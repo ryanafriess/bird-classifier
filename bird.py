@@ -1,6 +1,7 @@
 import PIL
 from PIL import Image
 import pathlib
+import random
 
 data_dir = pathlib.Path('nabirds/images/')  # Replace with the actual path
 

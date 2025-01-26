@@ -1,11 +1,15 @@
 import PIL
 from PIL import Image
 import pathlib
+import random
+import classes_map
 
-data_dir = pathlib.Path('nabirds/images/')  # Replace with the actual path
 
-print(data_dir)
-print(data_dir.exists())
+data_dir = pathlib.Path('nabirds/images/')  # Replace with the actual path 
+bird_dict = classes_map.build_dict()
+
+# print(data_dir)
+# print(data_dir.exists())
 
 
 image_count = len(list(data_dir.glob('**/*.jpg')))
@@ -14,15 +18,16 @@ print("Image count:", image_count)
 
 def clean_num(num): #changes number from int to '{num}/*' form
     if num < 0 or num >= 10000:
-        return "invalid number"
+        print("invalid number")
+        return -1
     return f"{num:04d}/*"
 
-def show_image(num):
+def show_image(num): #shows a random image given a number
     num_str = clean_num(num)
-    print(num_str)
+    print("Showing random image of " + bird_dict[num])
 
     sample_image = list(data_dir.glob(num_str))
-    img = PIL.Image.open(str(sample_image[0]))
+    img = PIL.Image.open(str(sample_image[random.randrange(len(sample_image))]))
     img.show()
     
 def main():
