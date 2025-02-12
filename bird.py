@@ -7,8 +7,9 @@ from tensorflow.keras import layers
 from tensorflow.keras.models import load_model
 import matplotlib.pyplot as plt
 
-data_dir = pathlib.Path('bird_data/images/')  # Replace with the actual path
-    
+data_dir = pathlib.Path('images/')  # Repslace with the actual path
+
+  
 def get_class_names():
     path = data_dir
     train_ds = tf.keras.utils.image_dataset_from_directory(
@@ -39,6 +40,9 @@ def display_images(batch, class_names):
 def train_model(train_ds):
     #creates the tensorflor CNN model
     model = keras.Sequential([
+    layers.RandomZoom(height_factor=(-0.2, 0.2), width_factor=(-0.2, 0.2)),
+    layers.RandomBrightness(factor=0.2),
+    layers.GaussianNoise(stddev=0.1),
     layers.Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
     layers.MaxPooling2D(2, 2),
     layers.Conv2D(64, (3, 3), activation='relu'),
@@ -97,8 +101,8 @@ def main():
     #             rgb = image[112, 112]
     #             print("RGB value: ", rgb)
     
-    model = train_from_file("bird_model.h5", 10, train_ds)
-    # model = train_model(train_ds)
+    # model = train_from_file("bird_model.h5", 10, train_ds)
+    model = train_model(train_ds)
     # model = load_model("bird_model.h5")
     for images, labels in train_ds.take(1):
         predictions = model.predict(images)
