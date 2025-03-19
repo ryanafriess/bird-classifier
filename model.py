@@ -1,159 +1,101 @@
-import PIL
-from PIL import Image
-import pathlib
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-from tensorflow.keras.models import load_model
-from tensorflow.keras.regularizers import l2
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping
+import torch
+import torchvision
+from torchvision import transforms
+from torchvision.datasets import ImageFolder
+from torch.utils.data import DataLoader
+from torch.nn.functional import F
 import matplotlib.pyplot as plt
-import numpy as np
 
 
-data_dir = pathlib.Path('images/')
+transforms = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor()
+])
 
-def load_img_data(path):
-    train_ds = tf.keras.utils.image_dataset_from_directory(
-        data_dir,
-        validation_split = 0.2,
-        subset = 'training',
-        seed = 123,
-        image_size = (224,224),
-        batch_size = 32
-    )
-    val_ds = tf.keras.utils.image_dataset_from_directory(
-        data_dir,
-        validation_split = 0.2,
-        subset = 'validation',
-        seed = 123,
-        image_size = (224,224),
-        batch_size = 32
-    )
-    
-    return train_ds, val_ds
+dataset = ImageFolder(root="images/", transform=transforms)
 
-def feature_scale(train_ds):
+# Create DataLoader for batch processing
+dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-    data_augmentation = tf.keras.Sequential([
-        tf.keras.layers.RandomCrop(180, 180, seed = None),
-        tf.keras.layers.Resizing(224, 224),
-        tf.keras.layers.RandomContrast(factor = 0.5, seed = None),
-        tf.keras.layers.RandomFlip('horizontal'),
-        # tf.keras.layers.RandomTranslation(height_factor = 0.1, width_factor = 0.1),
-        # tf.keras.layers.RandomRotation(0.2),
-    ])
+images, labels = next(iter(dataloader))
 
-    normalization = tf.keras.layers.Rescaling(1./255, input_shape = (224, 224, 3))
+# print(batch)
+# for images, labels in dataloader:
+#     print(images.shape)  # Output: torch.Size([32, 3, 128, 128])
+#     print(labels)        # Output: tensor([0, 1, 1, 0, ...])
+#     break  # Just checking one batch
 
-    train_ds = train_ds.map(lambda x, y: (data_augmentation(x), y))
-    train_ds = train_ds.map(lambda x, y: (normalization(x), y))
- 
-    return train_ds
+class CNN(torch.nn.Module):
+    def __init__(self):
+        super(CNN, self).__init__()
+        
+        self.conv1 = torch.nn.Conv2d(in_channels = 3, out_channels = 16, kernel_size = 3, padding = 1)
+        self.conv1 = torch.nn.Conv2d(in_channels = 16, out_channels = 48, kernel_size = 3, padding = 1)
 
-def feature_scale_val_ds(val_ds):
-    normalization = tf.keras.layers.Rescaling(1./255, input_shape = (224, 224, 3))
-    val_ds = val_ds.map(lambda x, y: (normalization(x), y))
+        self.bn1 = torch.nn.BatchNorm2d(16)
+        self.bn2 = torch.nn.BatchNorm2d(48)
 
-    return val_ds
+        self.pool = torch.nn.MaxPool2d(kernel_size = 2, stride = 2)
 
+        self.fc1 = torch.nn.Linear(48 * 28 * 28 * 28, 512)
+        
+        self.fc2 = torch.nn.Linear(512, 200)
 
-def show_images(train_ds, class_names):
-    image_batch, label_batch = next(iter(train_ds))
-    image_batch = image_batch.numpy()
+    def foward(self, x):
+        # Block 1
+        x = self.conv1
+        x = self.bn1
+        x = F.relu(x)
+        x = self.pool
+        
+        # Block 2
+        x = self.conv2
+        x = self.bn2
+        x = F.relu(x)
+        x = self.pool
 
-    plt.figure(figsize=(10, 10))
-   
-    for i in range(9):  # Show 9 images
-        plt.subplot(3, 3, i + 1)
-        plt.imshow(image_batch[i])  # Display image
-        plt.title(class_names[label_batch[i].numpy()]) 
-        plt.axis("off")  # Hide axes
-    
-    plt.show()
+        # Fully Connected Layers
+        x = self.fc1
+        x = F.relu(x)
+        x = self.fc2
+        
+
+        return x
 
 
 
-def train_model(model, train_ds, val_ds, epoch_num):
+model = CNN()
+epochs = 5
+optimizer = ??
+loss_func = ??
 
-    learning_rate = 0.0001
+for n in range(epochs):
+    run_loss = 0.0
 
-    model.compile(
-        optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate),
-        loss = tf.keras.losses.SparseCategoricalCrossentropy(),
-        metrics = ['accuracy']
-    )
+    for images, labels in dataloader: #replace dataloader with dataloader(training)
+        #forward prop
+        outputs = model(images)
+        loss = loss_func(outputs, labels) #define loss_func ()
 
-    early_stopping = EarlyStopping(monitor = 'val_loss', patience = 5, restore_best_weights = True)
+        optimizer.zero_grad() #define optimizer
+        loss.backward()
 
+        optimizer.step()
+        run_loss += loss.item()
 
-    model.fit(
-        train_ds,
-        validation_data = val_ds,
-        epochs = epoch_num,
-        callbacks = [early_stopping]
-    )
+    print("Epoch #" + str(n+1) + ", Loss: " + str(run_loss /len(dataloader))) #replace dataloader with dataloader(training)
+print("Training Over. Validation beginning...")
 
-    model.save('bird_model.keras')
+correct_count = 0
+total_count = 0
 
-def train_from_file(filename, train_ds, val_ds, epoch_num):
-    model = load_model(filename)
-    train_model(model, train_ds, val_ds, epoch_num)
-    model.save('bird_model.keras')
+for images, labels in dataloader: #replace with dataloader(validate)
+    ouptuts = model(images)
+    _ , max_output = torch.max(outputs, 1)
+    total_count += 32
+    correct_count += sum(1 for i in range(len(max_output)) if max_output[i] == labels[i])
 
-
-
-def main():
-    train_ds, val_ds = load_img_data(data_dir)
-    class_names = train_ds.class_names
-    train_ds = feature_scale(train_ds)
-
-
-    # model = tf.keras.Sequential([
-    # layers.Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
-    # layers.MaxPooling2D(2, 2),
-    # layers.Conv2D(64, (3, 3), activation='relu'),
-    # layers.MaxPooling2D(2, 2),
-    # layers.Conv2D(128, (3, 3), activation='relu'),
-    # layers.MaxPooling2D(2, 2),
-    # layers.Flatten(),
-    # layers.Dense(128, activation='relu'),
-    # layers.Dense(len(class_names), activation='softmax')  # Output layer  # Output layer
-    # ])
-
-    base_model = tf.keras.applications.MobileNetV2(input_shape = (224, 224, 3),
-                                                   include_top = False,
-                                                   weights = 'imagenet')
-    base_model.trainable = True
-
-    for layer in base_model.layers[:-10]:
-        layer.Trainable = False
-    
-    preprocess_input = tf.keras.applications.mobilenet_v2.preprocess_input
-    global_average_layer = tf.keras.layers.GlobalAveragePooling2D()
-    prediction_layer = tf.keras.layers.Dense(len(class_names), activation='softmax')
+accuracy = 100 * correct_count / total_count
+print("Test Accuracy: " + str(accuracy))
 
 
-    inputs = tf.keras.Input(shape = (224, 224, 3))
-    x = preprocess_input(inputs)
-    x = base_model(x, training = False)
-    x = global_average_layer(x)
-    x = tf.keras.layers.Dropout(0.3)(x)
-    x = tf.keras.layers.Dense(512, activation = 'relu')(x)
-    x = tf.keras.layers.Dropout(0.3)(x)
-    tf.keras.layers.Dense(256, activation = 'relu')(x)
-    outputs = prediction_layer(x)
-    model = tf.keras.Model(inputs, outputs)
-
-
-    #show_images(train_ds, class_names)
-    #train_model(model, train_ds, val_ds, 10)
-    train_from_file('bird_model.keras', train_ds, val_ds, 1)
-    
-
-   
-
-
-
-if __name__ == '__main__': main()
