@@ -21,7 +21,9 @@ dataset = ImageFolder(root="bird_data/images/", transform=transforms)
 dataset_length = len(dataset)
 train_size = int(0.8 * dataset_length)
 val_size = dataset_length - train_size
-train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+
+torch.manual_seed(42)
+train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
 
 # Create DataLoader for batch processing
@@ -29,7 +31,7 @@ dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
 # Create DataLoader for training and validation
 trainloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-valloader = DataLoader(val_dataset, batch_size=32, shuffle=True)
+valloader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
 images, labels = next(iter(dataloader))
 
@@ -79,50 +81,64 @@ class CNN(torch.nn.Module):
 
         return x
 
-
-
-model = CNN()
-epochs = 5
-optimizer = optim.Adam(model.parameters(), lr=0.001) #Adam
-loss_func = nn.CrossEntropyLoss() #CrossEntropyLoss for multi-class classification (but only one class per image)
-
-print("Training started...")
-start_time = time.time()
-placeholder_time = time.time()
-for n in range(epochs):
-    run_loss = 0.0
-
-    for images, labels in trainloader: 
-        #forward prop
-        outputs = model(images)
-        loss = loss_func(outputs, labels) #define loss_func ()
-
-        optimizer.zero_grad() #define optimizer
-        loss.backward()
-
-        optimizer.step()
-        run_loss += loss.item()
-
-    print("Epoch #" + str(n+1) + ", Loss: " + str(run_loss /len(trainloader))) #average loss
-    epoch_time = time.time() - placeholder_time
-    print("Epoch completed after ", epoch_time, "seconds")
-    placeholder_time = time.time()
+def train_model(model = None, epochs = 5, save = True): #returns a model and saves model if save = True
+    if model is None: model = CNN()
     
-print("Training Over. Validation beginning...")
-total_train_time = time.time() - start_time
-print("Training over after ", total_train_time, "seconds")
-torch.save(model.state_dict(), 'bird_model_weights.pth')
+    optimizer = optim.Adam(model.parameters(), lr=0.001) #Adam
+    loss_func = nn.CrossEntropyLoss() #CrossEntropyLoss for multi-class classification (but only one class per image)
 
-correct_count = 0
-total_count = 0
+    print("Training started...")
+    start_time = time.time()
+    placeholder_time = time.time()
+    for n in range(epochs):
+        run_loss = 0.0
 
-for images, labels in valloader: 
-    ouptuts = model(images)
-    _ , max_output = torch.max(outputs, 1)
-    total_count += 32
-    correct_count += sum(1 for i in range(len(max_output)) if max_output[i] == labels[i])
+        for images, labels in trainloader: 
+            #forward prop
+            outputs = model(images)
+            loss = loss_func(outputs, labels) #define loss_func ()
 
-accuracy = 100 * correct_count / total_count
-print("Test Accuracy: " + str(accuracy))
+            optimizer.zero_grad() #define optimizer
+            loss.backward()
+
+            optimizer.step()
+            run_loss += loss.item()
+
+        print("Epoch #" + str(n+1) + ", Loss: " + str(run_loss /len(trainloader))) #average loss
+        epoch_time = time.time() - placeholder_time
+        print("Epoch completed after ", epoch_time, "seconds")
+        placeholder_time = time.time()
+        
+    print("Training Over. Validation beginning...")
+    total_train_time = time.time() - start_time
+    print("Training over after ", total_train_time, "seconds")
+    if(save): torch.save(model.state_dict(), 'bird_model_weights.pth')
+    return model
 
 
+def load_model(): #loads model from 'bird_model_weights.pth' and returns
+    model = CNN()
+    model.load_state_dict(torch.load('bird_model_weights.pth'))
+    return model
+
+def validate_model(model, valloader): #runs validation on model given valloader
+    model.eval()
+    correct_count = 0
+    total_count = 0
+
+    with torch.no_grad():
+        for images, labels in valloader: 
+            outputs = model(images)
+            _ , max_output = torch.max(outputs, 1)
+            total_count += labels.size(0)
+            correct_count += sum(1 for i in range(len(max_output)) if max_output[i] == labels[i])
+
+    accuracy = 100 * correct_count / total_count
+    print("Test Accuracy: " + str(accuracy))
+
+def main():
+    model = load_model()
+    model = train_model(model=model, epochs=5, save=True)
+    validate_model(model, valloader)
+    
+if __name__ == '__main__': main()
