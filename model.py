@@ -17,7 +17,7 @@ transforms = transforms.Compose([
 ])
 
 # dataset = ImageFolder(root="images/", transform=transforms)
-dataset = ImageFolder(root="bird_data/images/", transform=transforms) 
+dataset = ImageFolder(root="images/", transform=transforms) 
 NUM_CLASSES = len(dataset.classes)
 # print(len(dataset.classes))
 
@@ -32,6 +32,12 @@ test_size = dataset_length - train_size - val_size
 
 torch.manual_seed(50)
 train_dataset, test_dataset, val_dataset = random_split(dataset, [train_size, test_size, val_size])
+
+train_labels = [train_dataset[i][1] for i in range(len(train_dataset))]
+print("______BEGIN")
+print(Counter(train_labels))
+print("END_______")
+
 
 # print("Validation set size:", len(val_dataset))
 # print("Sample train labels:", [train_dataset[i][1] for i in range(5)])
@@ -62,18 +68,31 @@ class CNN(torch.nn.Module):
     def __init__(self):
         super(CNN, self).__init__()
         
-        self.conv1 = torch.nn.Conv2d(in_channels = 3, out_channels = 16, kernel_size = 3, padding = 1)
-        self.conv2 = torch.nn.Conv2d(in_channels = 16, out_channels = 48, kernel_size = 3, padding = 1) #ask about naming
+        #block 1
+        self.conv1 = torch.nn.Conv2d(in_channels = 3, out_channels = 32, kernel_size = 3, padding = 1)
+        self.bn1 = torch.nn.BatchNorm2d(32)
+        
+        #block 2
+        self.conv2 = torch.nn.Conv2d(in_channels = 32, out_channels = 64, kernel_size = 3, padding = 1) #ask about naming
+        self.bn2 = torch.nn.BatchNorm2d(64)
 
-        self.bn1 = torch.nn.BatchNorm2d(16)
-        self.bn2 = torch.nn.BatchNorm2d(48)
+        #block 3
+        self.conv3 = torch.nn.Conv2d(in_channels = 64, out_channels = 128, kernel_size = 3, padding = 1)
+        self.bn3 = torch.nn.BatchNorm2d(128)
+
+        #block 4
+        self.conv4 = torch.nn.Conv2d(in_channels = 128, out_channels = 256, kernel_size = 3, padding = 1)
+        self.bn4 = torch.nn.BatchNorm2d(256)
 
         self.pool = torch.nn.MaxPool2d(kernel_size = 2, stride = 2)
 
-        # self.fc1 = torch.nn.Linear(48 * 28 * 28 * 28, 512)
-        self.fc1 = torch.nn.Linear(48 * 56 * 56, 512)
-        
-        self.fc2 = torch.nn.Linear(512, NUM_CLASSES)
+        #Fully connected layers
+        self.fc1 = torch.nn.Linear(256 * 14 * 14, 1024)
+        self.fc2 = torch.nn.Linear(1024, 512)
+        self.fc3 = torch.nn.Linear(512, NUM_CLASSES)
+
+        #droput layer 
+        self.dropout = torch.nn.Dropout(0.3)
 
     def forward(self, x):
         # Block 1
@@ -88,12 +107,31 @@ class CNN(torch.nn.Module):
         x = F.relu(x)
         x = self.pool(x)
 
+        # Block 3
+        x = self.conv3(x)
+        x = self.bn3(x)
+        x = F.relu(x)
+        x = self.pool(x)
+
+        # Block 4
+        x = self.conv4(x)
+        x = self.bn4(x)
+        x = F.relu(x)
+        x = self.pool(x)
+
         # Fully Connected Layers
         # print(x.shape)
         x = x.view(x.size(0), -1) #flatten (ill figure out why later)
+        
         x = self.fc1(x)
         x = F.relu(x)
+        x = self.dropout(x)
+        
         x = self.fc2(x)
+        x = F.relu(x)
+        x = self.dropout(x)
+        
+        x = self.fc3(x)
         
 
         return x
@@ -101,7 +139,8 @@ class CNN(torch.nn.Module):
 def train_model(model = None, epochs = 5, save = True): #returns a model and saves model if save = True
     if model is None: model = CNN()
     
-    optimizer = optim.Adam(model.parameters(), lr=0.001) #Adam
+    optimizer = optim.Adam(model.parameters(), lr=0.0001) #Adam
+    schedular = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2, factor=0.5)
     loss_func = nn.CrossEntropyLoss() #CrossEntropyLoss for multi-class classification (but only one class per image)
 
     print("Training started...")
@@ -177,7 +216,7 @@ def test_model(model, testloader): #runs validation on model given valloader
 
 def main():
     # model = load_model()
-    model = train_model(model=None, epochs=2, save=True)
+    model = train_model(model=None, epochs=5, save=True)
     test_model(model, testloader)
     
 if __name__ == '__main__': main()
